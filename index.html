@@ -1,0 +1,746 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  ShoppingBag, 
+  Search, 
+  ChevronLeft, 
+  CheckCircle, 
+  Clock, 
+  QrCode, 
+  CreditCard, 
+  Truck,
+  Package,
+  Home,
+  User,
+  History,
+  AlertCircle,
+  Plus,
+  Minus,
+  Info,
+  Edit2,
+  MapPin,
+  Settings,
+  ShieldCheck,
+  Bell,
+  Heart,
+  Wallet,
+  Star,
+  ChevronRight,
+  LogOut,
+  HelpCircle
+} from 'lucide-react';
+
+// --- KATALOG PRODUK LENGKAP ---
+const PRODUCTS = [
+  // AYAM
+  { id: 1, name: 'Pakan Ayam Pedaging (Starter) Gold-511', pricePerKg: 9500, category: 'Ayam', img: 'https://images.unsplash.com/photo-1548550023-2bdb3c5beed7?auto=format&fit=crop&q=80&w=400', minOrder: 2 },
+  { id: 2, name: 'Konsentrat Ayam Petelur High-Egg', pricePerKg: 10200, category: 'Ayam', img: 'https://images.unsplash.com/photo-1594488310344-93664d603a11?auto=format&fit=crop&q=80&w=400', minOrder: 2 },
+  { id: 3, name: 'Jagung Giling Halus Super', pricePerKg: 7500, category: 'Ayam', img: 'https://images.unsplash.com/photo-1551710679-6234f9a724e1?auto=format&fit=crop&q=80&w=400', minOrder: 2 },
+  
+  // IKAN
+  { id: 4, name: 'Pelet Ikan Lele LP-1 (Protein 32%)', pricePerKg: 11500, category: 'Ikan', img: 'https://images.unsplash.com/photo-1514907283155-ea5f4094c70c?auto=format&fit=crop&q=80&w=400', minOrder: 2 },
+  { id: 5, name: 'Pakan Apung Nila Hi-Pro-Vite 781', pricePerKg: 14500, category: 'Ikan', img: 'https://images.unsplash.com/photo-1608675402604-98444a77884d?auto=format&fit=crop&q=80&w=400', minOrder: 2 },
+  { id: 6, name: 'Pakan Udang Vaname S-3', pricePerKg: 18000, category: 'Ikan', img: 'https://images.unsplash.com/photo-1590752910014-7169426f4f10?auto=format&fit=crop&q=80&w=400', minOrder: 2 },
+  
+  // TERNAK BESAR
+  { id: 7, name: 'Konsentrat Sapi Perah (Laktasi)', pricePerKg: 8800, category: 'Ternak', img: 'https://images.unsplash.com/photo-1547496502-affa22d38842?auto=format&fit=crop&q=80&w=400', minOrder: 2 },
+  { id: 8, name: 'Pakan Kambing Penggemukan (Komplit)', pricePerKg: 6500, category: 'Ternak', img: 'https://images.unsplash.com/photo-1524024973431-2ad916746881?auto=format&fit=crop&q=80&w=400', minOrder: 2 },
+  
+  // BURUNG / LAINNYA
+  { id: 9, name: 'Milet Putih Pilihan (Burung)', pricePerKg: 12000, category: 'Burung', img: 'https://images.unsplash.com/photo-1452570053594-1b985d6ea890?auto=format&fit=crop&q=80&w=400', minOrder: 2 },
+];
+
+const App = () => {
+  // Navigation State
+  const [view, setView] = useState('home'); // home, cart, checkout, qris, success, history, profile
+  
+  // Marketplace State
+  const [cart, setCart] = useState([]);
+  const [orders, setOrders] = useState([]);
+  const [activeCategory, setActiveCategory] = useState('Semua');
+  
+  // Checkout & Payment State
+  const [paymentMethod, setPaymentMethod] = useState('qris');
+  const [isPaying, setIsPaying] = useState(false);
+  const [countdown, setCountdown] = useState(300); // 5 menit
+  
+  // Address State
+  const [address, setAddress] = useState("Jl. Peternakan Raya No. 45, Kecamatan Sukadamai, Bogor, Jawa Barat");
+  const [isEditingAddress, setIsEditingAddress] = useState(false);
+  const [tempAddress, setTempAddress] = useState(address);
+  
+  // Product Modal State
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [quantity, setQuantity] = useState(2);
+
+  // Helper
+  const formatIDR = (price) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(price);
+  
+  const categories = ['Semua', 'Ayam', 'Ikan', 'Ternak', 'Burung'];
+  const filteredProducts = activeCategory === 'Semua' ? PRODUCTS : PRODUCTS.filter(p => p.category === activeCategory);
+
+  // --- ACTIONS ---
+  const openQuantityModal = (product) => {
+    setSelectedProduct(product);
+    setQuantity(product.minOrder);
+  };
+
+  const addToCart = () => {
+    const existingItemIndex = cart.findIndex(item => item.id === selectedProduct.id);
+    if (existingItemIndex > -1) {
+      const newCart = [...cart];
+      newCart[existingItemIndex].quantity += quantity;
+      newCart[existingItemIndex].totalPrice = newCart[existingItemIndex].quantity * selectedProduct.pricePerKg;
+      setCart(newCart);
+    } else {
+      setCart([...cart, { 
+        ...selectedProduct, 
+        quantity, 
+        totalPrice: quantity * selectedProduct.pricePerKg 
+      }]);
+    }
+    setSelectedProduct(null);
+  };
+
+  const removeFromCart = (index) => {
+    setCart(cart.filter((_, i) => i !== index));
+  };
+
+  // Kalkulasi Harga
+  const cartTotal = cart.reduce((acc, item) => acc + item.totalPrice, 0);
+  const shippingFee = cart.length > 0 ? 10000 : 0; 
+  const grandTotal = cartTotal + shippingFee;
+
+  // Timer QRIS
+  useEffect(() => {
+    let timer;
+    if (view === 'qris' && countdown > 0) {
+      timer = setInterval(() => setCountdown(prev => prev - 1), 1000);
+    }
+    return () => clearInterval(timer);
+  }, [view, countdown]);
+
+  const formatTime = (seconds) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
+
+  // Simulasi Proses Pembayaran
+  const handleProcessPayment = () => {
+    setIsPaying(true);
+    setTimeout(() => {
+      const newOrder = {
+        id: `INV-${Date.now()}`,
+        items: [...cart],
+        total: grandTotal,
+        date: new Date().toLocaleDateString('id-ID'),
+        status: 'Dikemas',
+        address: address,
+        method: paymentMethod === 'qris' ? 'QRIS' : 'COD'
+      };
+      setOrders([newOrder, ...orders]);
+      setIsPaying(false);
+      setView('success');
+      setCart([]);
+      setCountdown(300); // Reset timer
+    }, 3000); // Simulasi delay 3 detik
+  };
+
+  const saveAddress = () => {
+    setAddress(tempAddress);
+    setIsEditingAddress(false);
+  };
+
+  // --- KOMPONEN HEADER ---
+  const Header = ({ title, showBack }) => (
+    <div className="sticky top-0 bg-white shadow-sm px-4 py-4 flex items-center gap-4 z-40">
+      {showBack && <button onClick={() => setView('home')}><ChevronLeft className="w-6 h-6" /></button>}
+      
+      <div className="flex flex-col">
+        <h1 className="text-xl font-bold text-green-700 leading-tight">{title}</h1>
+        {title === 'Pakanku.id' && (
+          <span className="text-[10px] text-gray-500 italic mt-0.5">Created By : M Raihan</span>
+        )}
+      </div>
+
+      <div className="ml-auto flex items-center gap-4">
+        {view === 'home' && (
+           <div className="relative cursor-pointer" onClick={() => setView('cart')}>
+            <ShoppingBag className="w-6 h-6 text-gray-700" />
+            {cart.length > 0 && <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] rounded-full w-5 h-5 flex items-center justify-center font-bold shadow-sm">{cart.length}</span>}
+          </div>
+        )}
+        <Bell className="w-6 h-6 text-gray-700 cursor-pointer" />
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="max-w-md mx-auto min-h-screen bg-gray-50 pb-24 font-sans text-gray-900 relative">
+      
+      {/* 🏠 1. HOME VIEW */}
+      {view === 'home' && (
+        <div className="animate-fade-in">
+          <Header title="Pakanku.id" />
+          
+          <div className="p-4 bg-white border-b border-gray-100 flex items-center gap-2 shadow-sm mb-2">
+              <MapPin className="w-4 h-4 text-red-500 flex-shrink-0" />
+              <div className="text-xs text-gray-500 truncate">
+                Dikirim ke <span className="font-bold text-gray-800">{address}</span>
+              </div>
+          </div>
+
+          <div className="p-4">
+            <div className="relative mb-6">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <input type="text" placeholder="Cari pakan favoritmu..." className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 outline-none transition-all shadow-sm" />
+            </div>
+
+            {/* Banner Promo */}
+            <div className="bg-gradient-to-r from-green-600 to-green-500 rounded-2xl p-5 text-white mb-6 shadow-lg relative overflow-hidden">
+               <div className="relative z-10">
+                  <h2 className="text-xl font-bold mb-1 italic">PakankuPay!</h2>
+                  <p className="text-sm opacity-90 mb-3">Dapatkan cashback poin 5% tiap beli pakan.</p>
+                  <button className="bg-white text-green-700 text-[10px] font-bold px-4 py-2 rounded-full uppercase tracking-wider shadow-sm">Aktivasi Sekarang</button>
+               </div>
+               <Wallet className="absolute right-[-10px] bottom-[-10px] opacity-20 rotate-12" size={100} />
+            </div>
+
+            {/* Category Filter */}
+            <div className="flex gap-2 overflow-x-auto pb-4 no-scrollbar">
+              {categories.map(cat => (
+                <button 
+                  key={cat}
+                  onClick={() => setActiveCategory(cat)}
+                  className={`px-5 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all shadow-sm ${activeCategory === cat ? 'bg-green-600 text-white' : 'bg-white border border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+
+            {/* Katalog Produk */}
+            <div className="grid grid-cols-2 gap-4">
+              {filteredProducts.map(product => (
+                <div key={product.id} className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 flex flex-col transition-transform active:scale-95">
+                  <div className="relative">
+                    <img src={product.img} alt={product.name} className="w-full h-36 object-cover bg-gray-100" loading="lazy" />
+                    <div className="absolute top-2 left-2 bg-white/90 backdrop-blur px-2 py-1 rounded-lg text-[9px] font-bold text-green-700 shadow-sm">
+                      {product.category}
+                    </div>
+                  </div>
+                  <div className="p-3 flex-1 flex flex-col justify-between">
+                    <div>
+                      <h4 className="font-semibold text-sm line-clamp-2 h-10 leading-tight mb-1">{product.name}</h4>
+                      <div className="flex items-center gap-1 mb-2">
+                         <Star className="w-3 h-3 text-orange-400 fill-orange-400" />
+                         <span className="text-[10px] text-gray-400">4.8 (120+)</span>
+                      </div>
+                      <p className="font-extrabold text-green-700 text-base mb-3">{formatIDR(product.pricePerKg)} <span className="text-[10px] text-gray-400 font-normal">/kg</span></p>
+                    </div>
+                    <button 
+                      onClick={() => openQuantityModal(product)}
+                      className="w-full border-2 border-green-600 text-green-600 py-2 rounded-xl text-xs font-bold hover:bg-green-600 hover:text-white transition-all flex items-center justify-center gap-2"
+                    >
+                      <Plus className="w-3 h-3" /> Tambah
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 📦 MODAL KUANTITAS */}
+      {selectedProduct && (
+        <div className="fixed inset-0 bg-black/60 z-[100] flex items-end justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-3xl p-6 animate-slide-up shadow-2xl">
+            <div className="flex gap-4 mb-6">
+              <img src={selectedProduct.img} className="w-24 h-24 rounded-xl object-cover shadow-sm bg-gray-100" />
+              <div>
+                <h3 className="font-bold text-lg leading-tight">{selectedProduct.name}</h3>
+                <p className="text-green-700 font-bold mt-1 text-lg">{formatIDR(selectedProduct.pricePerKg)} <span className="text-gray-400 font-normal text-xs">/kg</span></p>
+                <div className="flex items-center gap-1 mt-2 text-orange-600 bg-orange-50 px-2 py-1 rounded-lg inline-flex">
+                  <Info className="w-3 h-3" />
+                  <span className="text-[10px] font-bold">Min. pembelian {selectedProduct.minOrder} kg</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col items-center gap-4 mb-8">
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Kuantitas (Kg)</p>
+              <div className="flex items-center gap-8 bg-gray-50 p-2 rounded-2xl border border-gray-100 shadow-inner">
+                <button 
+                  onClick={() => setQuantity(Math.max(selectedProduct.minOrder, quantity - 1))}
+                  className="w-12 h-12 rounded-xl bg-white shadow-sm flex items-center justify-center text-gray-600 border border-gray-200 active:bg-gray-100"
+                >
+                  <Minus className="w-6 h-6" />
+                </button>
+                <span className="text-3xl font-extrabold w-12 text-center text-green-700">{quantity}</span>
+                <button 
+                  onClick={() => setQuantity(quantity + 1)}
+                  className="w-12 h-12 rounded-xl bg-green-600 shadow-lg shadow-green-100 flex items-center justify-center text-white active:bg-green-700"
+                >
+                  <Plus className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+
+            <button 
+              onClick={addToCart}
+              className="w-full bg-green-600 text-white py-4 rounded-2xl font-bold shadow-xl shadow-green-200 flex items-center justify-center gap-3 mb-4 active:scale-95 transition-transform"
+            >
+              <ShoppingBag className="w-5 h-5" /> Tambah - {formatIDR(quantity * selectedProduct.pricePerKg)}
+            </button>
+            <button onClick={() => setSelectedProduct(null)} className="w-full text-gray-400 font-bold py-2 hover:text-gray-600">Batal</button>
+          </div>
+        </div>
+      )}
+
+      {/* 🛒 2. CART VIEW */}
+      {view === 'cart' && (
+        <div className="animate-fade-in">
+          <Header title="Keranjang Belanja" showBack />
+          <div className="p-4">
+             {cart.length === 0 ? (
+               <div className="text-center py-20 flex flex-col items-center">
+                 <div className="bg-gray-100 p-6 rounded-full mb-4">
+                   <ShoppingBag className="w-16 h-16 text-gray-300" />
+                 </div>
+                 <p className="font-bold text-gray-600 text-lg">Keranjang Kosong</p>
+                 <p className="text-sm text-gray-400 mt-1">Ayo cari pakan berkualitas untuk ternakmu.</p>
+                 <button onClick={() => setView('home')} className="mt-8 bg-green-600 text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-green-100">Belanja Sekarang</button>
+               </div>
+             ) : (
+               <>
+                <div className="space-y-4 mb-6">
+                  {cart.map((item, idx) => (
+                    <div key={idx} className="flex gap-4 bg-white p-3 rounded-2xl border border-gray-100 items-center shadow-sm">
+                      <img src={item.img} className="w-20 h-20 rounded-xl object-cover bg-gray-100" />
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-sm line-clamp-1 mb-1">{item.name}</h4>
+                        <p className="text-xs text-gray-500">{item.quantity} kg x {formatIDR(item.pricePerKg)}</p>
+                        <p className="text-green-700 font-extrabold text-sm mt-1">{formatIDR(item.totalPrice)}</p>
+                      </div>
+                      <button onClick={() => removeFromCart(idx)} className="text-red-400 p-2 hover:bg-red-50 rounded-lg transition-colors">
+                        <AlertCircle className="w-5 h-5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                
+                <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm mb-6">
+                  <h3 className="font-bold text-sm mb-4 border-b border-gray-50 pb-2">Ringkasan Belanja</h3>
+                  <div className="flex justify-between mb-3 text-sm text-gray-500">
+                    <span>Total Harga ({cart.length} Barang)</span>
+                    <span>{formatIDR(cartTotal)}</span>
+                  </div>
+                  <div className="flex justify-between mb-3 text-sm text-green-600 font-semibold">
+                    <span>Ongkos Kirim (Flat)</span>
+                    <span>{formatIDR(shippingFee)}</span>
+                  </div>
+                  <div className="border-t border-gray-100 pt-3 mt-3 flex justify-between font-extrabold text-lg">
+                    <span>Total Tagihan</span>
+                    <span className="text-green-700">{formatIDR(grandTotal)}</span>
+                  </div>
+                </div>
+
+                <button onClick={() => setView('checkout')} className="w-full bg-green-600 text-white py-4 rounded-xl font-bold shadow-xl shadow-green-200 active:scale-95 transition-transform">
+                  Lanjut ke Checkout
+                </button>
+               </>
+             )}
+          </div>
+        </div>
+      )}
+
+      {/* 💳 3. CHECKOUT VIEW */}
+      {view === 'checkout' && (
+        <div className="animate-fade-in pb-32">
+          <Header title="Checkout" showBack />
+          <div className="p-4">
+            
+            {/* Alamat Section */}
+            <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm mb-6 relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-500 via-blue-500 to-red-500"></div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2 text-gray-500">
+                  <Truck className="w-4 h-4 text-blue-500" />
+                  <span className="text-xs font-bold uppercase tracking-wide">Alamat Pengiriman</span>
+                </div>
+                {!isEditingAddress && (
+                  <button onClick={() => setIsEditingAddress(true)} className="flex items-center gap-1 text-green-600 text-xs font-bold bg-green-50 px-2 py-1 rounded-md">
+                    <Edit2 className="w-3 h-3" /> Ubah
+                  </button>
+                )}
+              </div>
+              
+              {isEditingAddress ? (
+                <div className="space-y-3 mt-2 animate-fade-in">
+                  <textarea 
+                    className="w-full border-2 border-gray-200 rounded-xl p-3 text-sm focus:border-green-500 outline-none"
+                    rows="3"
+                    value={tempAddress}
+                    onChange={(e) => setTempAddress(e.target.value)}
+                  />
+                  <div className="flex gap-2">
+                    <button onClick={saveAddress} className="bg-green-600 text-white px-4 py-2 rounded-lg text-xs font-bold flex-1">Simpan</button>
+                    <button onClick={() => {setTempAddress(address); setIsEditingAddress(false);}} className="bg-gray-100 text-gray-600 px-4 py-2 rounded-lg text-xs font-bold">Batal</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-2">
+                  <h4 className="font-bold">Bapak M.Raihan</h4>
+                  <p className="text-sm text-gray-500 mt-1 leading-relaxed">{address}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Metode Pembayaran */}
+            <div className="mb-6">
+              <h3 className="font-bold mb-3 flex items-center gap-2 text-gray-800">
+                <CreditCard className="w-5 h-5 text-green-600" />
+                Metode Pembayaran
+              </h3>
+              <div className="space-y-3">
+                <div 
+                  onClick={() => setPaymentMethod('qris')}
+                  className={`flex items-center justify-between p-4 rounded-2xl border-2 transition-all cursor-pointer ${paymentMethod === 'qris' ? 'border-green-600 bg-green-50/50 shadow-sm' : 'border-gray-100 bg-white'}`}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="bg-blue-50 p-2.5 rounded-xl text-blue-600">
+                      <QrCode className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-sm">QRIS (Scan & Bayar)</h4>
+                      <p className="text-[10px] text-gray-500 mt-0.5">Semua E-Wallet & Mobile Banking</p>
+                    </div>
+                  </div>
+                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'qris' ? 'border-green-600 bg-green-600' : 'border-gray-300'}`}>
+                    <div className="w-2 h-2 rounded-full bg-white" />
+                  </div>
+                </div>
+
+                <div 
+                  onClick={() => setPaymentMethod('cod')}
+                  className={`flex items-center justify-between p-4 rounded-2xl border-2 transition-all cursor-pointer ${paymentMethod === 'cod' ? 'border-green-600 bg-green-50/50 shadow-sm' : 'border-gray-100 bg-white'}`}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="bg-orange-50 p-2.5 rounded-xl text-orange-500">
+                      <History className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-sm">COD (Bayar di Tempat)</h4>
+                      <p className="text-[10px] text-gray-500 mt-0.5">Bayar saat kurir tiba</p>
+                    </div>
+                  </div>
+                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'cod' ? 'border-green-600 bg-green-600' : 'border-gray-300'}`}>
+                    <div className="w-2 h-2 rounded-full bg-white" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Rincian Produk Checkout */}
+            <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm space-y-3">
+               <h3 className="font-bold text-sm mb-3">Pesanan Anda</h3>
+               {cart.map((item, i) => (
+                 <div key={i} className="flex justify-between text-xs text-gray-600 border-b border-gray-50 pb-2">
+                    <span className="flex-1 pr-4">{item.quantity}kg x {item.name}</span>
+                    <span className="font-semibold text-gray-800">{formatIDR(item.totalPrice)}</span>
+                 </div>
+               ))}
+               <div className="flex justify-between text-xs text-green-600 font-semibold pt-2">
+                  <span>Ongkos Kirim Flat</span>
+                  <span>{formatIDR(shippingFee)}</span>
+               </div>
+            </div>
+
+            {/* Bottom Fix Pay Bar */}
+            <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white p-4 border-t border-gray-100 flex items-center justify-between gap-4 z-50 shadow-[0_-10px_20px_-10px_rgba(0,0,0,0.1)]">
+              <div>
+                <p className="text-xs text-gray-500">Total Tagihan</p>
+                <p className="text-xl font-extrabold text-green-700">{formatIDR(grandTotal)}</p>
+              </div>
+              <button 
+                onClick={() => paymentMethod === 'qris' ? setView('qris') : handleProcessPayment()}
+                className="flex-1 bg-green-600 text-white py-3.5 rounded-xl font-bold shadow-lg shadow-green-200 active:scale-95 transition-transform"
+              >
+                Bayar Sekarang
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 📱 4. QRIS PAYMENT VIEW */}
+      {view === 'qris' && (
+        <div className="bg-white min-h-screen animate-fade-in pb-10">
+          <Header title="Pembayaran QRIS" showBack />
+          <div className="p-6 text-center">
+            <div className="flex justify-center mb-4">
+              {/* Official QRIS Logo dummy */}
+              <img src="https://upload.wikimedia.org/wikipedia/commons/a/a2/Logo_QRIS.svg" className="h-10" alt="QRIS Logo" />
+            </div>
+            <p className="text-gray-500 text-sm mb-6">Scan QR ini menggunakan e-wallet atau m-banking Anda untuk menyelesaikan pembayaran.</p>
+            
+            <div className="bg-gray-50 p-6 rounded-[2rem] inline-block shadow-inner mb-6 relative">
+              <div className="bg-white p-4 rounded-2xl shadow-md border-4 border-white">
+                {/* SVG QR Code Dummy */}
+                <svg width="220" height="220" viewBox="0 0 220 220" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <rect width="220" height="220" fill="white"/>
+                  <path d="M20 20H80V40H40V80H20V20ZM140 20H200V80H180V40H140V20ZM20 140V200H80V180H40V140H20ZM200 140V200H140V180H180V140H200ZM60 60V100H100V60H60ZM120 60V100H160V60H120ZM60 120V160H100V120H60ZM120 120V140H140V120H120ZM140 140V160H160V140H140Z" fill="#111827"/>
+                  <path d="M40 100H60V120H40V100ZM80 80H100V100H80V80ZM140 80H160V100H140V80ZM180 100H200V120H180V100ZM80 140H100V160H80V140Z" fill="#111827"/>
+                  <rect x="75" y="75" width="70" height="70" fill="#16a34a" rx="10" />
+                  <text x="110" y="115" textAnchor="middle" fill="white" fontSize="14" fontWeight="bold">Pakanku</text>
+                </svg>
+              </div>
+              
+              {isPaying && (
+                <div className="absolute inset-0 bg-white/90 backdrop-blur-sm rounded-[2rem] flex flex-col items-center justify-center animate-fade-in">
+                  <div className="w-14 h-14 border-4 border-green-200 border-t-green-600 rounded-full animate-spin mb-4"></div>
+                  <p className="font-bold text-green-700 text-lg">Memverifikasi...</p>
+                  <p className="text-xs text-gray-500 mt-1">Jangan tutup halaman ini</p>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-1 mb-8">
+              <p className="text-gray-400 text-sm font-semibold">Total Pembayaran</p>
+              <h2 className="text-4xl font-extrabold text-gray-900">{formatIDR(grandTotal)}</h2>
+            </div>
+
+            <div className="flex items-center justify-center gap-2 mb-8 text-orange-600 bg-orange-50 py-3 px-6 rounded-2xl font-mono font-bold text-lg inline-flex">
+              <Clock className="w-5 h-5" />
+              <span>{formatTime(countdown)}</span>
+            </div>
+
+            <button 
+              disabled={isPaying}
+              onClick={handleProcessPayment}
+              className="w-full bg-green-600 text-white py-4 rounded-2xl font-bold text-lg hover:bg-green-700 transition-colors shadow-xl shadow-green-200 disabled:opacity-70 disabled:cursor-not-allowed"
+            >
+              Saya Sudah Bayar
+            </button>
+            <p className="text-xs text-gray-400 mt-4 px-4">Dalam implementasi asli, sistem akan mendeteksi otomatis saat pembayaran berhasil.</p>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ 5. SUCCESS VIEW */}
+      {view === 'success' && (
+        <div className="bg-white min-h-screen flex flex-col items-center justify-center p-8 text-center animate-fade-in">
+          <div className="w-28 h-28 bg-green-50 rounded-full flex items-center justify-center mb-6 animate-bounce shadow-inner">
+            <CheckCircle className="w-16 h-16 text-green-600" />
+          </div>
+          <h1 className="text-2xl font-bold mb-2 text-gray-800">Hore! Pembayaran Berhasil</h1>
+          <p className="text-gray-500 mb-8 text-sm">Pesanan pakan Anda segera kami proses dan kirimkan ke alamat tujuan.</p>
+          
+          <div className="w-full bg-gray-50 rounded-3xl p-5 text-left space-y-4 mb-8 shadow-sm border border-gray-100">
+            <div className="flex justify-between items-center text-sm border-b border-gray-200 pb-3">
+              <span className="text-gray-500">No. Invoice</span>
+              <span className="font-mono font-bold text-gray-800 bg-white px-2 py-1 rounded shadow-sm">{orders[0]?.id}</span>
+            </div>
+            <div className="flex justify-between items-center text-sm border-b border-gray-200 pb-3">
+              <span className="text-gray-500">Metode Bayar</span>
+              <span className="font-bold text-blue-600">{orders[0]?.method}</span>
+            </div>
+            <div className="flex flex-col text-sm pt-1">
+              <span className="text-gray-500 mb-1">Dikirim ke:</span>
+              <span className="font-bold text-xs leading-relaxed text-gray-800">{orders[0]?.address}</span>
+            </div>
+          </div>
+
+          <button onClick={() => setView('history')} className="w-full bg-green-600 text-white py-4 rounded-xl font-bold mb-4 shadow-lg shadow-green-100 active:scale-95 transition-transform">Lihat Riwayat Pesanan</button>
+          <button onClick={() => setView('home')} className="text-gray-500 font-bold py-2 px-4 hover:bg-gray-50 rounded-lg transition-colors">Kembali ke Beranda</button>
+        </div>
+      )}
+
+      {/* 👤 6. PROFILE VIEW */}
+      {view === 'profile' && (
+        <div className="animate-fade-in">
+          <Header title="Akun Saya" />
+          <div className="p-4">
+            {/* Header Profil */}
+            <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm mb-6 flex items-center gap-4">
+               <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center border-4 border-green-50 font-bold text-green-700 text-2xl shadow-sm">
+                 MR
+               </div>
+               <div>
+                  <h3 className="font-bold text-lg text-gray-800">M.Raihan</h3>
+                  <p className="text-xs text-gray-400">m.raihan@email.com</p>
+                  <div className="flex items-center gap-1 mt-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-blue-500" />
+                    <span className="text-[10px] text-blue-600 font-bold uppercase tracking-widest bg-blue-50 px-2 py-0.5 rounded-md">Peternak Verifikasi</span>
+                  </div>
+               </div>
+            </div>
+
+            {/* Dompet / Poin */}
+            <div className="grid grid-cols-2 gap-4 mb-8">
+               <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col justify-center">
+                  <div className="flex items-center gap-2 text-gray-400 mb-2 text-[10px] font-bold uppercase">
+                     <Wallet className="w-4 h-4 text-green-600" /> PakankuPay
+                  </div>
+                  <p className="font-extrabold text-green-700 text-lg">Rp 1.250.000</p>
+               </div>
+               <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col justify-center">
+                  <div className="flex items-center gap-2 text-gray-400 mb-2 text-[10px] font-bold uppercase">
+                     <Star className="w-4 h-4 text-orange-500" /> Poin
+                  </div>
+                  <p className="font-extrabold text-orange-600 text-lg">4.500 Pts</p>
+               </div>
+            </div>
+
+            {/* Status Pesanan Panel */}
+            <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm mb-8">
+               <div className="flex justify-between items-center mb-5">
+                  <h4 className="font-bold text-sm text-gray-800">Status Pesanan</h4>
+                  <button className="text-xs text-green-600 font-bold bg-green-50 px-3 py-1 rounded-full" onClick={() => setView('history')}>Riwayat</button>
+               </div>
+               <div className="flex justify-between text-center px-2">
+                  <div className="space-y-2 opacity-60">
+                    <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto text-gray-500">
+                      <CreditCard className="w-5 h-5" />
+                    </div>
+                    <p className="text-[10px] font-semibold text-gray-600">Belum Bayar</p>
+                  </div>
+                  <div className="space-y-2 relative">
+                    <div className="w-12 h-12 bg-orange-50 rounded-2xl flex items-center justify-center mx-auto text-orange-500 shadow-inner">
+                      <Package className="w-5 h-5" />
+                    </div>
+                    {orders.length > 0 && <span className="absolute -top-1 right-2 bg-red-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-bold shadow-sm">{orders.length}</span>}
+                    <p className="text-[10px] font-bold text-orange-600">Dikemas</p>
+                  </div>
+                  <div className="space-y-2 opacity-60">
+                    <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto text-blue-500">
+                      <Truck className="w-5 h-5" />
+                    </div>
+                    <p className="text-[10px] font-semibold text-gray-600">Dikirim</p>
+                  </div>
+                  <div className="space-y-2 opacity-60">
+                    <div className="w-12 h-12 bg-green-50 rounded-2xl flex items-center justify-center mx-auto text-green-500">
+                      <CheckCircle className="w-5 h-5" />
+                    </div>
+                    <p className="text-[10px] font-semibold text-gray-600">Selesai</p>
+                  </div>
+               </div>
+            </div>
+
+            {/* Menu Lainnya */}
+            <div className="space-y-3">
+               <h4 className="font-bold text-sm text-gray-800 mb-2 pl-2">Pengaturan</h4>
+               {[
+                 { icon: <Heart className="w-5 h-5 text-pink-500" />, title: 'Pakan Favorit' },
+                 { icon: <MapPin className="w-5 h-5 text-red-500" />, title: 'Alamat Tersimpan' },
+                 { icon: <Settings className="w-5 h-5 text-gray-600" />, title: 'Pengaturan Akun' },
+                 { icon: <HelpCircle className="w-5 h-5 text-blue-500" />, title: 'Bantuan & Komplain' }
+               ].map((item, idx) => (
+                 <div key={idx} className="flex items-center justify-between bg-white p-4 rounded-2xl border border-gray-100 shadow-sm active:bg-gray-50 cursor-pointer transition-colors">
+                    <div className="flex items-center gap-4">
+                       <div className="bg-gray-50 p-2 rounded-xl">{item.icon}</div>
+                       <span className="text-sm font-semibold text-gray-700">{item.title}</span>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-gray-400" />
+                 </div>
+               ))}
+               
+               <div className="flex items-center justify-between bg-red-50 p-4 rounded-2xl border border-red-100 mt-6 active:bg-red-100 cursor-pointer">
+                  <div className="flex items-center gap-4">
+                     <div className="bg-white p-2 rounded-xl"><LogOut className="w-5 h-5 text-red-500" /></div>
+                     <span className="text-sm font-bold text-red-600">Keluar Aplikasi</span>
+                  </div>
+               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 📜 7. HISTORY VIEW */}
+      {view === 'history' && (
+        <div className="animate-fade-in pb-24">
+          <Header title="Riwayat Pesanan" showBack />
+          <div className="p-4 space-y-4">
+            {orders.length === 0 ? (
+              <div className="text-center py-20 flex flex-col items-center opacity-60">
+                 <History className="w-16 h-16 text-gray-400 mb-4" />
+                 <p className="font-bold text-gray-500">Belum ada transaksi</p>
+                 <p className="text-xs text-gray-400 mt-1">Pesanan Anda akan muncul di sini</p>
+              </div>
+            ) : (
+              orders.map((order) => (
+                <div key={order.id} className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm relative overflow-hidden">
+                  <div className="absolute top-0 right-0 bg-orange-100 text-orange-600 text-[10px] font-bold px-4 py-1.5 rounded-bl-xl uppercase tracking-widest">
+                    {order.status}
+                  </div>
+                  <div className="mb-4 pt-1">
+                    <h4 className="font-mono text-xs font-bold text-gray-800 bg-gray-100 inline-block px-2 py-1 rounded">{order.id}</h4>
+                    <p className="text-[10px] text-gray-400 mt-1">{order.date} • {order.method}</p>
+                  </div>
+                  <div className="space-y-3 mb-4 bg-gray-50 p-3 rounded-xl border border-gray-100">
+                    {order.items.map((it, i) => (
+                      <div key={i} className="flex justify-between items-center text-xs">
+                        <div className="flex items-center gap-2">
+                           <img src={it.img} className="w-8 h-8 rounded object-cover" />
+                           <span className="text-gray-700 font-medium">{it.quantity}kg {it.name}</span>
+                        </div>
+                        <span className="font-bold text-gray-800">{formatIDR(it.totalPrice)}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="border-t border-dashed border-gray-200 pt-3 flex flex-col gap-1 mb-3">
+                    <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Dikirim ke:</p>
+                    <p className="text-xs text-gray-600 line-clamp-2">{order.address}</p>
+                  </div>
+                  <div className="flex justify-between items-center pt-3 border-t border-gray-100">
+                    <p className="text-sm text-gray-500 font-bold">Total Belanja</p>
+                    <p className="font-extrabold text-green-700 text-lg">{formatIDR(order.total)}</p>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 🧭 BOTTOM NAVIGATION BAR (Global) */}
+      {(view === 'home' || view === 'history' || view === 'profile') && (
+        <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t border-gray-100 px-8 py-3 flex justify-between items-center z-50 rounded-t-3xl shadow-[0_-10px_30px_-15px_rgba(0,0,0,0.1)]">
+          <button onClick={() => setView('home')} className={`flex flex-col items-center transition-all duration-300 ${view === 'home' ? 'text-green-600 scale-110' : 'text-gray-400 hover:text-gray-600'}`}>
+            <Home className={`w-6 h-6 ${view === 'home' ? 'fill-green-50' : ''}`} />
+            <span className="text-[10px] font-bold mt-1">Beranda</span>
+          </button>
+          <button onClick={() => setView('history')} className={`flex flex-col items-center transition-all duration-300 ${view === 'history' ? 'text-green-600 scale-110' : 'text-gray-400 hover:text-gray-600'}`}>
+            <History className={`w-6 h-6 ${view === 'history' ? 'fill-green-50' : ''}`} />
+            <span className="text-[10px] font-bold mt-1">Pesanan</span>
+          </button>
+          <button onClick={() => setView('profile')} className={`flex flex-col items-center transition-all duration-300 ${view === 'profile' ? 'text-green-600 scale-110' : 'text-gray-400 hover:text-gray-600'}`}>
+            <User className={`w-6 h-6 ${view === 'profile' ? 'fill-green-50' : ''}`} />
+            <span className="text-[10px] font-bold mt-1">Profil</span>
+          </button>
+        </div>
+      )}
+
+      {/* Global Styles */}
+      <style>{`
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        @keyframes slide-up { 
+          from { transform: translateY(100%); opacity: 0; } 
+          to { transform: translateY(0); opacity: 1; } 
+        }
+        .animate-slide-up { animation: slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+        
+        @keyframes fade-in {
+          from { opacity: 0; transform: translateY(5px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in { animation: fade-in 0.3s ease-out forwards; }
+      `}</style>
+    </div>
+  );
+};
+
+export default App;
